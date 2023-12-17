@@ -1,7 +1,7 @@
 /** @format */
 
 import { StatusBar } from "expo-status-bar";
-import { Children, PropsWithChildren, useState } from "react";
+import { Children, PropsWithChildren, useEffect, useState } from "react";
 import {
   Button,
   Dimensions,
@@ -17,22 +17,26 @@ import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { RecoilRoot, atom, useRecoilState } from "recoil";
 
 export default () => {
   return (
-    <SafeAreaProvider>
-      <App />
-    </SafeAreaProvider>
+    <RecoilRoot>
+      <SafeAreaProvider>
+        <App />
+      </SafeAreaProvider>
+    </RecoilRoot>
   );
 };
 
-export type Block = {
-  isSelected: boolean;
-};
+//MARKER: CONSTANTS
+const DEFAULT_MINE_LEFT = -1;
+
+//MARKER: Helper Functions
 const makeArray = (rows: number, columns: number) => {
-  let arr = [];
+  let arr:Block[][] = [];
   for (let i = 0; i < columns; i++) {
-    arr.push(new Array(rows).fill({ isSelected: false }));
+    arr.push(new Array(rows).fill({ isSelected: false,isBomb:false }));
   }
   return arr;
 };
@@ -52,18 +56,43 @@ function replaceItemAtRowColumn<T>(
   return newArray;
 }
 
-function App() {
-  // MARKER: 게임 설정 및 블럭 크기 계산하는 부분
-  const insets = useSafeAreaInsets();
+function getRandomInt(maxNum:number) {
+  return Math.floor(Math.random() * maxNum);
+}
 
-  const widthBlock = 6; //가로 블록 계수
-  const heightBlock = 6; //세로 블록 계수
-  const mineCount = 4; //지뢰 계수
+
+//MARKER: Model
+export type Block = {
+  isSelected: boolean;
+  isBomb:boolean;
+};
+const boardState = atom<Block[][]>({
+  key: "BoardState",
+  default: [],
+});
+const mineLeftState = atom<number>({
+  key: "mineLeft",
+  default: DEFAULT_MINE_LEFT,
+});
+
+
+function App() {
+  const insets = useSafeAreaInsets();
+  const widthBlock = 4; //가로 블록 계수
+  const heightBlock = 4; //세로 블록 계수
+  const MINECOUNT = 3;
 
   const windowWidth = Dimensions.get("window").width;
   const windowHeight =
     Dimensions.get("window").height - insets.top - insets.bottom - 50;
-  const [blocks, setBlocks] = useState(makeArray(widthBlock, heightBlock));
+
+  const [blocks, setBlocks] = useRecoilState(boardState);
+  const [mineLeft, setMineLeft] = useRecoilState(mineLeftState);
+
+  //TODO: move initializing to level selector
+  useEffect(() => {
+    setBlocks(makeArray(widthBlock, heightBlock));
+  }, []);
 
   const itemWidth = Math.min(
     windowWidth / widthBlock,
@@ -74,6 +103,29 @@ function App() {
     if (item.isSelected) {
       console.log("중복 클릭 불가!");
       return;
+    }
+
+    ///MINE 초기값이면, 첫 클릭 후 MINE 위치 선정하여 Block update
+    if (mineLeft == DEFAULT_MINE_LEFT) {
+      setMineLeft(MINECOUNT);
+      const totalBlocks = blocks[0].length * blocks.length;
+      console.log('totlablocks,',totalBlocks);
+      var mines:number[] = [];
+      while(mines.length < MINECOUNT){
+        var r = getRandomInt(totalBlocks);
+        if(mines.indexOf(r) === -1){
+          mines.push(r);
+        }
+      }
+
+      let copiedArray = [...blocks];
+      //1. set mine locations excluding first click position
+      for (let i = 0; i < mines.length; i++) {
+        const mineRow = ~~(mines[i]/widthBlock);
+        const mineCol = mines[i] % heightBlock;
+        copiedArray = replaceItemAtRowColumn(copiedArray,mineRow,mineCol,{...copiedArray[mineRow][mineCol],isBomb:true});
+      }
+      setBlocks(copiedArray);
     }
 
     const row = index[0];
@@ -91,7 +143,7 @@ function App() {
     <SafeAreaView style={{ flex: 1 }}>
       <View style={styles.container}>
         <View style={styles.scoreboardContianer}>
-          <Text>mines left area</Text>
+          <Text>{mineLeft}</Text>
           <Button
             title="Reset Button"
             onPress={() => {
