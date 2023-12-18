@@ -36,7 +36,7 @@ const DEFAULT_MINE_LEFT = -1;
 const makeArray = (rows: number, columns: number) => {
   let arr:Block[][] = [];
   for (let i = 0; i < columns; i++) {
-    arr.push(new Array(rows).fill({ isSelected: false,isBomb:false }));
+    arr.push(new Array(rows).fill({ isSelected: false,isBomb:false,nearbyBombCount:0 }));
   }
   return arr;
 };
@@ -65,6 +65,7 @@ function getRandomInt(maxNum:number) {
 export type Block = {
   isSelected: boolean;
   isBomb:boolean;
+  nearbyBombCount:number;
 };
 const boardState = atom<Block[][]>({
   key: "BoardState",
@@ -79,7 +80,7 @@ const mineLeftState = atom<number>({
 function App() {
   const insets = useSafeAreaInsets();
   const widthBlock = 4; //가로 블록 계수
-  const heightBlock = 4; //세로 블록 계수
+  const heightBlock = 5; //세로 블록 계수
   const MINECOUNT = 3;
 
   const windowWidth = Dimensions.get("window").width;
@@ -125,20 +126,62 @@ function App() {
         const mineCol = mines[i] % heightBlock;
         copiedArray = replaceItemAtRowColumn(copiedArray,mineRow,mineCol,{...copiedArray[mineRow][mineCol],isBomb:true});
       }
-      setBlocks(copiedArray);
+      // setBlocks(copiedArray);
+      const calculatedBombMountedArray = initNumbers(copiedArray);
+      setBlocks(calculatedBombMountedArray);
     }
 
+    //calculate block's value 
     const row = index[0];
     const column = index[1];
-
-    setBlocks(
-      replaceItemAtRowColumn<Block>(blocks, row, column, {
-        ...item,
-        isSelected: true,
-      })
-    );
+    // getZero([row,column]);
+    // setBlocks(
+    //   replaceItemAtRowColumn<Block>(blocks, row, column, {
+    //     ...item,
+    //     isSelected: true,
+    //   })
+    // );
   };
+  const initNumbers = (bombMountedArray:Block[][])=>{
+    let newBlocks = bombMountedArray;
+    for(let i = 0;i<heightBlock;i++){
+      for(let j=0;j<widthBlock;j++){
+        const bombCountForCurrentIndex = getNearbyBombCount(bombMountedArray,[i,j]);
+        console.log('bombcount:',bombCountForCurrentIndex);
+          newBlocks=replaceItemAtRowColumn<Block>(newBlocks,i,j,{...newBlocks[i][j],nearbyBombCount:bombCountForCurrentIndex});
+      }
+    }
+    return newBlocks;
+  }
+  //[1,1]
+  const getNearbyBombCount = (bombMountedArray:Block[][],focus:number[])=>{
+    let nearbyBombCount:number = 0;
+    //9direction search
+    console.log('finding bomb count for :',focus);
+    for(let i=-1;i<2;i++){
+      for(let j=-1;j<2;j++){
+        console.log('j:',j);
+        let rowOfCurrentFocus = focus[0]+i;
+        let columnOfCurrentFocus = focus[1]+j;
 
+        if (((rowOfCurrentFocus < 0 ) || (columnOfCurrentFocus <0)) || ((rowOfCurrentFocus >= heightBlock )|| (columnOfCurrentFocus >= widthBlock))) {
+          console.log('current block is out of bounds: ',rowOfCurrentFocus,',',columnOfCurrentFocus);
+          continue;
+        }else{
+          console.log('inbound: ',rowOfCurrentFocus,',',columnOfCurrentFocus);
+        }
+        if((bombMountedArray[rowOfCurrentFocus][columnOfCurrentFocus]).isBomb === true){
+          nearbyBombCount++;
+        }
+      }
+    }
+    return nearbyBombCount;
+  }
+  
+  // const sweepMine = (row:number,col:number)=>{
+  //   const cleanArea = [:]
+
+  // }
   return (
     <SafeAreaView style={{ flex: 1 }}>
       <View style={styles.container}>
@@ -170,15 +213,24 @@ function App() {
                     onItemPress([rowIndex, colIndex], item);
                   }}
                   style={{
-                    minWidth: itemWidth,
-                    maxWidth: itemWidth,
+                    alignItems:'center',
+                    justifyContent:'center',
+                    width:itemWidth,
+                    // minWidth: itemWidth,
+                    // maxWidth: itemWidth,
                     height: itemWidth,
+                    borderWidth: 1,
+                    borderColor: "#fff",
                     backgroundColor: item.isSelected
                       ? "green"
                       : "rgba(249, 180, 45, 0.25)",
                   }}
                 >
-                  <Item />
+                  <Item >
+                    <Text>
+                      {item.isBomb ? "*" : item.nearbyBombCount}
+                    </Text>
+                  </Item>
                 </TouchableOpacity>
               ))}
             </View>
@@ -240,7 +292,7 @@ const styles = StyleSheet.create({
     backgroundColor: "lightgray",
   },
   item: {
-    flex: 1,
+    // flex: 1,
     // minWidth: 100,
     // maxWidth: 100,
     // height: 100,
@@ -248,9 +300,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
 
     // my visual styles; not important for grid
-    padding: 0,
+    // padding: 0,
     // backgroundColor: "rgba(249, 180, 45, 0.25)",
-    borderWidth: 1,
-    borderColor: "#fff",
+
   },
 });
