@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import {
+  Alert,
   Button,
   Dimensions,
   SafeAreaView,
@@ -151,49 +152,8 @@ function hasAtleastOneFreeBlockExcludingSelf(
       return true;
     }
   }
-
-  // isCoordinateInBound(
-  //           { x: row + i, y: col + j },
-  //           widthBlock,
-  //           heightBlock
-  //         )
-
   return false;
 }
-
-// function hasAtleastOneFreeBlockExcludingSelf(
-//   blocks: Block[][],
-//   selfRow: number,
-//   selfCol: number,
-//   row: number,
-//   col: number,
-//   widthBlock: number,
-//   heightBlock: number
-// ) {
-//   for (let i = -1; i < 2; i++) {
-//     for (let j = -1; j < 2; j++) {
-//       const currRow = row + i;
-//       const currCol = row + j;
-//       if (
-//         !isCoordinateInBound(
-//           { x: row + i, y: col + j },
-//           widthBlock,
-//           heightBlock
-//         )
-//       ) {
-//         console.log("not bound:", row + i, ",", col + j);
-//         continue;
-//       }
-
-//       if (
-//         blocks[row + i][col + j].nearbyBombCount == 0
-//       ) {
-//         return true;
-//       }
-//     }
-//   }
-//   return false;
-// }
 
 function makeArray(rows: number, columns: number) {
   let arr: Block[][] = [];
@@ -203,6 +163,7 @@ function makeArray(rows: number, columns: number) {
         isSelected: false,
         isBomb: false,
         nearbyBombCount: -1,
+        isFlagged: false,
       })
     );
   }
@@ -242,6 +203,7 @@ export type Block = {
   isSelected: boolean;
   isBomb: boolean;
   nearbyBombCount: number;
+  isFlagged: boolean;
 };
 type BoardGeography = {
   widthBlockCount: number;
@@ -250,6 +212,7 @@ type BoardGeography = {
   flagTotal: number;
   isFreshBoard: boolean;
   level: BoardLevel;
+  totalColoredCount: number;
 };
 const boardState = atom<Block[][]>({
   key: "BoardState",
@@ -280,6 +243,7 @@ function getDefaultBoard(level: BoardLevel): BoardGeography {
         flagTotal: 0,
         isFreshBoard: true,
         level: BoardLevel.BEGINNER,
+        totalColoredCount:0,
       };
     case BoardLevel.INTERMEDIATE:
       return {
@@ -289,6 +253,7 @@ function getDefaultBoard(level: BoardLevel): BoardGeography {
         flagTotal: 0,
         isFreshBoard: true,
         level: BoardLevel.INTERMEDIATE,
+        totalColoredCount:0,
       };
     case BoardLevel.EXPERT:
       return {
@@ -298,6 +263,7 @@ function getDefaultBoard(level: BoardLevel): BoardGeography {
         flagTotal: 0,
         isFreshBoard: true,
         level: BoardLevel.EXPERT,
+        totalColoredCount:0,
       };
   }
 }
@@ -308,6 +274,19 @@ const minesLeftState = selector({
     return boardGeography.mineTotal - boardGeography.flagTotal;
   },
 });
+const areaLeftToSweepState = selector({
+  key: "AreaLeftToSweep",
+  get:({get})=>{
+    // const blocks = get(boardState);
+    const boardGeography = get(boardGeographyState);
+    return (boardGeography.widthBlockCount * boardGeography.heightBlockCount) - boardGeography.mineTotal - boardGeography.totalColoredCount;
+    // for(var i = 0; i < arrToConvert.length; i++)
+    // {
+    //     newArr = newArr.concat(arrToConvert[i]);
+    // }
+    
+  }
+})
 
 function App() {
   const insets = useSafeAreaInsets();
@@ -318,15 +297,12 @@ function App() {
       bottomSheetModalRef.current?.present();
     }
   }, [bottomSheet]);
-  // const widthBlock = 4; //가로 블록 계수
-  // const heightBlock = 5; //세로 블록 계수
-  // const MINECOUNT = 5;
+
   useEffect(() => {
-    setBlocks(
-      makeArray(boardGeography.widthBlockCount, boardGeography.heightBlockCount)
-    );
-    // setbottomSheet({...bottomSheet,isVisible:true});
+    resetGame();
   }, []);
+
+  
   const windowWidth = Dimensions.get("window").width;
   const windowHeight =
     Dimensions.get("window").height - insets.top - insets.bottom - 50;
@@ -335,8 +311,16 @@ function App() {
     useRecoilState(boardGeographyState);
   const [blocks, setBlocks] = useRecoilState(boardState);
   const minesLeft = useRecoilValue(minesLeftState);
-  ///
-  // const [mineLeft, setMineLeft] = useRecoilState(mineLeftState);
+  const areaLeftToSweep = useRecoilValue(areaLeftToSweepState);
+  // useEffect(()=>{
+  //   console.log('minesleft!',minesLeft);
+  // },[minesLeft])
+  useEffect(()=>{
+    console.log('areaLefttosweep:',areaLeftToSweep);
+    if(areaLeftToSweep == 0){
+      gameOver(true);
+    }
+  },[areaLeftToSweep])
 
   const itemWidth = Math.min(
     windowWidth / boardGeography.widthBlockCount,
@@ -344,10 +328,38 @@ function App() {
   );
 
   //MARKER: Intents
-  // const resetGame = () => {
+  const resetGame = () => {
+    setBoardGeography(getDefaultBoard(boardGeography.level));
+    setBlocks(
+      makeArray(boardGeography.widthBlockCount, boardGeography.heightBlockCount)
+    );
+  };
+  const onItemLongPress = (
+    index: number[],
+    item: Block,
+    boardgeography: BoardGeography
+  ) => {
+    //TODO: refactor to selector , filtered flagged items
+    if (item.isFlagged) {
+      setBoardGeography({
+        ...boardGeography,
+        flagTotal: boardgeography.flagTotal - 1,
+      });
+    } else {
+      setBoardGeography({
+        ...boardGeography,
+        flagTotal: boardgeography.flagTotal + 1,
+      });
+    }
 
-  // };
-
+    setBlocks(
+      replaceItemAtRowColumn(blocks, index[0], index[1], {
+        ...blocks[index[0]][index[1]],
+        isFlagged: !item.isFlagged,
+        isSelected: !item.isSelected,
+      })
+    );
+  };
   const onItemPress = (
     index: number[],
     item: Block,
@@ -356,6 +368,7 @@ function App() {
     if (item.isSelected) {
       return;
     }
+    console.log("onItemPress index:", index);
     ///MINE 초기값이면, 첫 클릭 후 MINE 위치 선정하여 Block updater
     // if (minesLeft == DEFAULT_MINE_LEFT) {
     if (boardGeography.isFreshBoard) {
@@ -398,18 +411,40 @@ function App() {
         boardGeography.widthBlockCount,
         boardGeography.heightBlockCount
       );
-      setBoardGeography({ ...boardGeography, isFreshBoard: false });
+      // setBoardGeography({ ...boardGeography, isFreshBoard: false });
     } else {
       const row = index[0];
       const column = index[1];
-      flood_fill(
-        blocks,
-        row,
-        column,
-        boardGeography.widthBlockCount,
-        boardGeography.heightBlockCount
-      );
+      if (item.isBomb) {
+        console.log("bombed!!");
+        gameOver(false);
+      } else {
+        flood_fill(
+          blocks,
+          row,
+          column,
+          boardGeography.widthBlockCount,
+          boardGeography.heightBlockCount
+        );
+      }
     }
+  };
+  const gameOver = (isWin: boolean) => {
+    if (isWin) {
+      createAlert("승리했습니다!");
+    } else {
+      createAlert("패배했습니다.");
+    }
+  };
+  const createAlert = (message: string) => {
+    Alert.alert("GAME OVER", message, [
+      {
+        text: "다시하기",
+        onPress: () => {
+          resetGame();
+        },
+      },
+    ]);
   };
 
   const flood_fill = (
@@ -424,7 +459,7 @@ function App() {
     queue.enqueue({ x: row, y: col });
     // const newGrid = blocks;
     let newArray: Block[][] = copyArray(blocks);
-
+    let coloredCount = 0;
     while (!queue.isEmpty()) {
       const coordinate = queue.dequeue();
 
@@ -442,126 +477,67 @@ function App() {
             { ...newArray[coordinate.x][coordinate.y], isSelected: true }
           );
         }
-        if (newArray[coordinate.x][coordinate.y].nearbyBombCount == 0){
-          if (
-            hasAtleastOneFreeBlockExcludingSelf(
-              newArray,
-              coordinate.x,
-              coordinate.y,
-              coordinate.x + 1,
-              coordinate.y + 1,
-              widthBlock,
-              heightBlock
-            )
-          ) {
-            queue.enqueue({ x: coordinate.x + 1, y: coordinate.y + 1});
-          }    
-          if (
-            hasAtleastOneFreeBlockExcludingSelf(
-              newArray,
-              coordinate.x,
-              coordinate.y,
-              coordinate.x - 1,
-              coordinate.y - 1,
-              widthBlock,
-              heightBlock
-            )
-          ) {
-            queue.enqueue({ x: coordinate.x - 1, y: coordinate.y - 1});
-          }  
-          if (
-            hasAtleastOneFreeBlockExcludingSelf(
-              newArray,
-              coordinate.x,
-              coordinate.y,
-              coordinate.x + 1,
-              coordinate.y - 1,
-              widthBlock,
-              heightBlock
-            )
-          ) {
-            queue.enqueue({ x: coordinate.x + 1, y: coordinate.y - 1});
-          }        
-          if (
-            hasAtleastOneFreeBlockExcludingSelf(
-              newArray,
-              coordinate.x,
-              coordinate.y,
-              coordinate.x - 1,
-              coordinate.y + 1,
-              widthBlock,
-              heightBlock
-            )
-          ) {
-            queue.enqueue({ x: coordinate.x - 1, y: coordinate.y + 1});
-          }  
+        coloredCount++;
 
+        const diagonal = [
+          [1, 1],
+          [-1, -1],
+          [1, -1],
+          [-1, 1],
+        ];
+        const cross = [
+          [1, 0],
+          [0, 1],
+          [-1, 0],
+          [0, -1],
+        ];
+        // 자신이 '0' 짜리면 대각선 enqueue.
+        if (newArray[coordinate.x][coordinate.y].nearbyBombCount == 0) {
+          for (let i = 0; i < diagonal.length; i++) {
+            if (
+              hasAtleastOneFreeBlockExcludingSelf(
+                newArray,
+                coordinate.x,
+                coordinate.y,
+                coordinate.x + diagonal[i][0],
+                coordinate.y + diagonal[i][1],
+                widthBlock,
+                heightBlock
+              )
+            ) {
+              queue.enqueue({
+                x: coordinate.x + diagonal[i][0],
+                y: coordinate.y + diagonal[i][1],
+              });
+            }
+          }
         }
-        
-
-
-
-        // /else
-        {
+        //공통적으로 십자 모양으로 enqueue
+        for (let i = 0; i < cross.length; i++) {
           if (
             hasAtleastOneFreeBlockExcludingSelf(
               newArray,
               coordinate.x,
               coordinate.y,
-              coordinate.x + 1,
-              coordinate.y,
+              coordinate.x + cross[i][0],
+              coordinate.y + cross[i][1],
               widthBlock,
               heightBlock
             )
           ) {
-            queue.enqueue({ x: coordinate.x + 1, y: coordinate.y });
-          }
-
-          if (
-            hasAtleastOneFreeBlockExcludingSelf(
-              newArray,
-              coordinate.x,
-              coordinate.y,
-              coordinate.x - 1,
-              coordinate.y,
-              widthBlock,
-              heightBlock
-            )
-          ) {
-            queue.enqueue({ x: coordinate.x - 1, y: coordinate.y });
-          }
-          if (
-            hasAtleastOneFreeBlockExcludingSelf(
-              newArray,
-              coordinate.x,
-              coordinate.y,
-              coordinate.x,
-              coordinate.y + 1,
-              widthBlock,
-              heightBlock
-            )
-          ) {
-            queue.enqueue({ x: coordinate.x, y: coordinate.y + 1 });
-          }
-          if (
-            hasAtleastOneFreeBlockExcludingSelf(
-              newArray,
-              coordinate.x,
-              coordinate.y,
-              coordinate.x,
-              coordinate.y - 1,
-              widthBlock,
-              heightBlock
-            )
-          ) {
-            queue.enqueue({ x: coordinate.x, y: coordinate.y - 1 });
+            queue.enqueue({
+              x: coordinate.x + cross[i][0],
+              y: coordinate.y + cross[i][1],
+            });
           }
         }
       } else {
         continue;
       }
     }
+    console.log('coloredCount:',coloredCount);
     setBlocks(newArray);
+    setBoardGeography({...boardGeography,totalColoredCount:boardGeography.totalColoredCount + coloredCount,isFreshBoard:false});
   };
 
   //[1,1]
@@ -596,7 +572,7 @@ function App() {
                 <Button
                   title="Reset Button"
                   onPress={() => {
-                    // console.log("will reset");
+                    resetGame();
                   }}
                 />
                 <Text>time passed area</Text>
@@ -614,10 +590,18 @@ function App() {
                   <View key={rowIndex} style={{ flexDirection: "row" }}>
                     {row.map((item, colIndex) => (
                       <TouchableOpacity
-                        disabled={item.isSelected}
+                        disabled={item.isSelected && item.isFlagged == false}
                         key={[rowIndex, colIndex].toString()}
                         onPress={() => {
                           onItemPress(
+                            [rowIndex, colIndex],
+                            item,
+                            boardGeography
+                          );
+                        }}
+                        onLongPress={() => {
+                          console.log("on long press!");
+                          onItemLongPress(
                             [rowIndex, colIndex],
                             item,
                             boardGeography
@@ -627,19 +611,25 @@ function App() {
                           alignItems: "center",
                           justifyContent: "center",
                           width: itemWidth,
-                          // minWidth: itemWidth,
-                          // maxWidth: itemWidth,
                           height: itemWidth,
                           borderWidth: 1,
                           borderColor: item.isSelected ? "purple" : "#fff",
                           backgroundColor: item.isSelected
-                            ? "green"
+                            ? item.isFlagged
+                              ? "rgba(249, 180, 45, 0.25)"
+                              : "lightgreen"
                             : "rgba(249, 180, 45, 0.25)",
                         }}
                       >
                         <Item>
                           <Text>
-                            {item.isBomb ? "*" : item.nearbyBombCount}
+                            {item.isSelected
+                              ? item.isFlagged
+                                ? "🚩"
+                                : item.isBomb
+                                ? "*"
+                                : item.nearbyBombCount
+                              : ""}
                           </Text>
                         </Item>
                       </TouchableOpacity>
