@@ -34,9 +34,15 @@ const DEFAULT_MINE_LEFT = -1;
 
 //MARKER: Helper Functions
 const makeArray = (rows: number, columns: number) => {
-  let arr:Block[][] = [];
+  let arr: Block[][] = [];
   for (let i = 0; i < columns; i++) {
-    arr.push(new Array(rows).fill({ isSelected: false,isBomb:false,nearbyBombCount:0 }));
+    arr.push(
+      new Array(rows).fill({
+        isSelected: false,
+        isBomb: false,
+        nearbyBombCount: 0,
+      })
+    );
   }
   return arr;
 };
@@ -56,16 +62,15 @@ function replaceItemAtRowColumn<T>(
   return newArray;
 }
 
-function getRandomInt(maxNum:number) {
+function getRandomInt(maxNum: number) {
   return Math.floor(Math.random() * maxNum);
 }
-
 
 //MARKER: Model
 export type Block = {
   isSelected: boolean;
-  isBomb:boolean;
-  nearbyBombCount:number;
+  isBomb: boolean;
+  nearbyBombCount: number;
 };
 const boardState = atom<Block[][]>({
   key: "BoardState",
@@ -75,7 +80,6 @@ const mineLeftState = atom<number>({
   key: "mineLeft",
   default: DEFAULT_MINE_LEFT,
 });
-
 
 function App() {
   const insets = useSafeAreaInsets();
@@ -105,33 +109,41 @@ function App() {
       console.log("중복 클릭 불가!");
       return;
     }
-
+    console.log("selected idnex:", index);
     ///MINE 초기값이면, 첫 클릭 후 MINE 위치 선정하여 Block update
     if (mineLeft == DEFAULT_MINE_LEFT) {
-      setMineLeft(MINECOUNT);
       const totalBlocks = blocks[0].length * blocks.length;
-      console.log('totlablocks,',totalBlocks);
-      var mines:number[] = [];
-      while(mines.length < MINECOUNT){
+      const pressedBlockInNumber = index[0] * heightBlock + index[1] * widthBlock;
+      console.log('pressedblockInNumbers,',pressedBlockInNumber);
+      console.log("totlablocks,", totalBlocks);
+      var mines: number[] = [];
+      while (mines.length < MINECOUNT) {
         var r = getRandomInt(totalBlocks);
-        if(mines.indexOf(r) === -1){
+        if (mines.indexOf(r) === -1 && ( pressedBlockInNumber != r)) {
           mines.push(r);
         }
       }
-
+      console.log("mines:", mines);
       let copiedArray = [...blocks];
       //1. set mine locations excluding first click position
       for (let i = 0; i < mines.length; i++) {
-        const mineRow = ~~(mines[i]/widthBlock);
-        const mineCol = mines[i] % heightBlock;
-        copiedArray = replaceItemAtRowColumn(copiedArray,mineRow,mineCol,{...copiedArray[mineRow][mineCol],isBomb:true});
+        const mineRow = ~~(mines[i] / widthBlock);
+
+        const mineCol = mines[i] % widthBlock;
+        copiedArray = replaceItemAtRowColumn(copiedArray, mineRow, mineCol, {
+          ...copiedArray[mineRow][mineCol],
+          isBomb: true,
+        });
+        console.log("minerow:", mineRow, "minecol:", mineCol);
       }
-      // setBlocks(copiedArray);
+
       const calculatedBombMountedArray = initNumbers(copiedArray);
       setBlocks(calculatedBombMountedArray);
+      setMineLeft(MINECOUNT);
+      // console.log('result:',calculatedBombMountedArray);
     }
 
-    //calculate block's value 
+    //calculate block's value
     const row = index[0];
     const column = index[1];
     // getZero([row,column]);
@@ -142,42 +154,58 @@ function App() {
     //   })
     // );
   };
-  const initNumbers = (bombMountedArray:Block[][])=>{
+  const initNumbers = (bombMountedArray: Block[][]) => {
     let newBlocks = bombMountedArray;
-    for(let i = 0;i<heightBlock;i++){
-      for(let j=0;j<widthBlock;j++){
-        const bombCountForCurrentIndex = getNearbyBombCount(bombMountedArray,[i,j]);
-        console.log('bombcount:',bombCountForCurrentIndex);
-          newBlocks=replaceItemAtRowColumn<Block>(newBlocks,i,j,{...newBlocks[i][j],nearbyBombCount:bombCountForCurrentIndex});
+    for (let i = 0; i < heightBlock; i++) {
+      for (let j = 0; j < widthBlock; j++) {
+        const bombCountForCurrentIndex = getNearbyBombCount(bombMountedArray, [
+          i,
+          j,
+        ]);
+        // console.log('bombcount:',bombCountForCurrentIndex);
+        newBlocks = replaceItemAtRowColumn<Block>(newBlocks, i, j, {
+          ...newBlocks[i][j],
+          nearbyBombCount: bombCountForCurrentIndex,
+        });
       }
     }
     return newBlocks;
-  }
+  };
   //[1,1]
-  const getNearbyBombCount = (bombMountedArray:Block[][],focus:number[])=>{
-    let nearbyBombCount:number = 0;
+  const getNearbyBombCount = (bombMountedArray: Block[][], focus: number[]) => {
+    let nearbyBombCount: number = 0;
     //9direction search
-    console.log('finding bomb count for :',focus);
-    for(let i=-1;i<2;i++){
-      for(let j=-1;j<2;j++){
-        console.log('j:',j);
-        let rowOfCurrentFocus = focus[0]+i;
-        let columnOfCurrentFocus = focus[1]+j;
-
-        if (((rowOfCurrentFocus < 0 ) || (columnOfCurrentFocus <0)) || ((rowOfCurrentFocus >= heightBlock )|| (columnOfCurrentFocus >= widthBlock))) {
-          console.log('current block is out of bounds: ',rowOfCurrentFocus,',',columnOfCurrentFocus);
+    // console.log('finding bomb count for :',focus);
+    for (let i = -1; i < 2; i++) {
+      for (let j = -1; j < 2; j++) {
+        // console.log('j:',j);
+        let rowOfCurrentFocus = focus[0] + i;
+        let columnOfCurrentFocus = focus[1] + j;
+        if (rowOfCurrentFocus == 0 || columnOfCurrentFocus == 0) {
           continue;
-        }else{
-          console.log('inbound: ',rowOfCurrentFocus,',',columnOfCurrentFocus);
         }
-        if((bombMountedArray[rowOfCurrentFocus][columnOfCurrentFocus]).isBomb === true){
+        if (
+          rowOfCurrentFocus < 0 ||
+          columnOfCurrentFocus < 0 ||
+          rowOfCurrentFocus >= heightBlock ||
+          columnOfCurrentFocus >= widthBlock
+        ) {
+          // console.log('current block is out of bounds: ',rowOfCurrentFocus,',',columnOfCurrentFocus);
+          continue;
+        } else {
+          // console.log('inbound: ',rowOfCurrentFocus,',',columnOfCurrentFocus);
+        }
+        if (
+          bombMountedArray[rowOfCurrentFocus][columnOfCurrentFocus].isBomb ===
+          true
+        ) {
           nearbyBombCount++;
         }
       }
     }
     return nearbyBombCount;
-  }
-  
+  };
+
   // const sweepMine = (row:number,col:number)=>{
   //   const cleanArea = [:]
 
@@ -198,6 +226,7 @@ function App() {
         <View
           style={{
             flex: 1,
+            width: "100%",
             backgroundColor: "lightgray",
             justifyContent: "center",
             alignItems: "center",
@@ -213,9 +242,9 @@ function App() {
                     onItemPress([rowIndex, colIndex], item);
                   }}
                   style={{
-                    alignItems:'center',
-                    justifyContent:'center',
-                    width:itemWidth,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: itemWidth,
                     // minWidth: itemWidth,
                     // maxWidth: itemWidth,
                     height: itemWidth,
@@ -226,10 +255,8 @@ function App() {
                       : "rgba(249, 180, 45, 0.25)",
                   }}
                 >
-                  <Item >
-                    <Text>
-                      {item.isBomb ? "*" : item.nearbyBombCount}
-                    </Text>
+                  <Item>
+                    <Text>{item.isBomb ? "*" : item.nearbyBombCount}</Text>
                   </Item>
                 </TouchableOpacity>
               ))}
@@ -292,7 +319,7 @@ const styles = StyleSheet.create({
     backgroundColor: "lightgray",
   },
   item: {
-    // flex: 1,
+    flex: 1,
     // minWidth: 100,
     // maxWidth: 100,
     // height: 100,
@@ -302,6 +329,5 @@ const styles = StyleSheet.create({
     // my visual styles; not important for grid
     // padding: 0,
     // backgroundColor: "rgba(249, 180, 45, 0.25)",
-
   },
 });
