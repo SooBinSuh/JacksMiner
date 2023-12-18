@@ -218,6 +218,10 @@ const boardState = atom<Block[][]>({
   key: "BoardState",
   default: [],
 });
+const secondsState = atom({
+  key:"Seconds",
+  default:0,
+})
 // const mineLeftState = atom<number>({
 //   key: "mineLeft",
 //   default: DEFAULT_MINE_LEFT,
@@ -290,8 +294,14 @@ const areaLeftToSweepState = selector({
 
 function App() {
   const insets = useSafeAreaInsets();
+  const windowWidth = Dimensions.get("window").width;
+  const windowHeight =
+    Dimensions.get("window").height - insets.top - insets.bottom - 50;
   const bottomSheetModalRef = useRef<BottomSheetModal>(null);
   const [bottomSheet, setbottomSheet] = useRecoilState(bottomSheetState);
+  const [seconds, setSeconds] = useRecoilState(secondsState);
+  const intervalRef = useRef<NodeJS.Timeout>();
+
   useEffect(() => {
     if (bottomSheet.isVisible) {
       bottomSheetModalRef.current?.present();
@@ -301,26 +311,29 @@ function App() {
   useEffect(() => {
     resetGame();
   }, []);
-
-  
-  const windowWidth = Dimensions.get("window").width;
-  const windowHeight =
-    Dimensions.get("window").height - insets.top - insets.bottom - 50;
-
   const [boardGeography, setBoardGeography] =
     useRecoilState(boardGeographyState);
   const [blocks, setBlocks] = useRecoilState(boardState);
   const minesLeft = useRecoilValue(minesLeftState);
   const areaLeftToSweep = useRecoilValue(areaLeftToSweepState);
-  // useEffect(()=>{
-  //   console.log('minesleft!',minesLeft);
-  // },[minesLeft])
+
   useEffect(()=>{
     console.log('areaLefttosweep:',areaLeftToSweep);
     if(areaLeftToSweep == 0){
       gameOver(true);
     }
-  },[areaLeftToSweep])
+  },[areaLeftToSweep]);
+  useEffect(()=>{
+    // let interval;
+    if (boardGeography.isFreshBoard == false){
+      intervalRef.current = setInterval(()=>{
+        setSeconds((prevSeconds)=>prevSeconds+1);
+
+      },1000);
+    }
+
+    return ()=>clearInterval(intervalRef.current!);
+  },[boardGeography.isFreshBoard])
 
   const itemWidth = Math.min(
     windowWidth / boardGeography.widthBlockCount,
@@ -329,10 +342,12 @@ function App() {
 
   //MARKER: Intents
   const resetGame = () => {
+    setSeconds(0);
     setBoardGeography(getDefaultBoard(boardGeography.level));
     setBlocks(
       makeArray(boardGeography.widthBlockCount, boardGeography.heightBlockCount)
     );
+    
   };
   const onItemLongPress = (
     index: number[],
@@ -430,11 +445,13 @@ function App() {
     }
   };
   const gameOver = (isWin: boolean) => {
+    clearInterval(intervalRef.current);
     if (isWin) {
       createAlert("승리했습니다!");
     } else {
       createAlert("패배했습니다.");
     }
+
   };
   const createAlert = (message: string) => {
     Alert.alert("GAME OVER", message, [
@@ -575,7 +592,7 @@ function App() {
                     resetGame();
                   }}
                 />
-                <Text>time passed area</Text>
+                <Text>{seconds}</Text>
               </View>
               <View
                 style={{
