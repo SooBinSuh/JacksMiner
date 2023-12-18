@@ -18,6 +18,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { RecoilRoot, atom, useRecoilState } from "recoil";
+import { Coordinate, Queue } from "./Queue";
 
 export default () => {
   return (
@@ -40,13 +41,17 @@ const makeArray = (rows: number, columns: number) => {
       new Array(rows).fill({
         isSelected: false,
         isBomb: false,
-        nearbyBombCount: 0,
+        nearbyBombCount: -1,
       })
     );
   }
   return arr;
 };
-
+const copyArray = (array: Block[][]) => {
+  let newArray = [];
+  for (var i = 0; i < array.length; i++) newArray[i] = array[i].slice();
+  return newArray;
+};
 function replaceItemAtRowColumn<T>(
   arr: T[][],
   row: number,
@@ -113,17 +118,16 @@ function App() {
     ///MINE 초기값이면, 첫 클릭 후 MINE 위치 선정하여 Block update
     if (mineLeft == DEFAULT_MINE_LEFT) {
       const totalBlocks = blocks[0].length * blocks.length;
-      const pressedBlockInNumber = index[0] * heightBlock + index[1] * widthBlock;
-      console.log('pressedblockInNumbers,',pressedBlockInNumber);
-      console.log("totlablocks,", totalBlocks);
+      const pressedBlockInNumber =
+        index[0] * heightBlock + index[1] * widthBlock;
+      console.log("pressedblockInNumbers,", pressedBlockInNumber);
       var mines: number[] = [];
       while (mines.length < MINECOUNT) {
         var r = getRandomInt(totalBlocks);
-        if (mines.indexOf(r) === -1 && ( pressedBlockInNumber != r)) {
+        if (mines.indexOf(r) === -1 && pressedBlockInNumber != r) {
           mines.push(r);
         }
       }
-      console.log("mines:", mines);
       let copiedArray = [...blocks];
       //1. set mine locations excluding first click position
       for (let i = 0; i < mines.length; i++) {
@@ -134,26 +138,109 @@ function App() {
           ...copiedArray[mineRow][mineCol],
           isBomb: true,
         });
-        console.log("minerow:", mineRow, "minecol:", mineCol);
       }
-
       const calculatedBombMountedArray = initNumbers(copiedArray);
-      setBlocks(calculatedBombMountedArray);
+      // setBlocks(calculatedBombMountedArray);
+      const row = index[0];
+      const column = index[1];
+      flood_fill(calculatedBombMountedArray, row, column);
       setMineLeft(MINECOUNT);
-      // console.log('result:',calculatedBombMountedArray);
+    } else {
+      const row = index[0];
+      const column = index[1];
+      flood_fill(blocks, row, column);
     }
 
     //calculate block's value
-    const row = index[0];
-    const column = index[1];
-    // getZero([row,column]);
-    // setBlocks(
-    //   replaceItemAtRowColumn<Block>(blocks, row, column, {
-    //     ...item,
-    //     isSelected: true,
-    //   })
-    // );
   };
+  const isCoordinateInBound = (
+    coordinate: Coordinate,
+    widthBound: number,
+    heightBound: number
+  ) => {
+    if (
+      coordinate.x < 0 ||
+      coordinate.y < 0 ||
+      coordinate.x >= heightBound ||
+      coordinate.y >= widthBound
+    ) {
+      return false;
+    } else {
+      return true;
+    }
+  };
+  const hasAtleastOneFree = (blocks: Block[][], row: number, col: number) => {
+    console.log("blocks", blocks);
+    for (let i = -1; i < 2; i++) {
+      for (let j = -1; j < 2; j++) {
+        if (i == 0 && j == 0) {
+          continue;
+        }
+        if (
+          !isCoordinateInBound(
+            { x: row + i, y: col + j },
+            widthBlock,
+            heightBlock
+          )
+        ) {
+          continue;
+        }
+        if (blocks[row + i][col + j].nearbyBombCount == 0) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  const flood_fill = (blocks: Block[][], row: number, col: number) => {
+    console.log("floodfill: row:", row, "column:", col);
+    let queue = new Queue<Coordinate>();
+    queue.enqueue({ x: row, y: col });
+    console.log("queue:", queue);
+    // const newGrid = blocks;
+
+    let newArray: Block[][] = copyArray(blocks);
+
+    while (!queue.isEmpty()) {
+      console.log("fill item:", row, ",", col);
+      const coordinate = queue.dequeue();
+      console.log("current coordinate:", coordinate);
+      console.log("queue:", queue);
+      if (
+        coordinate &&
+        isCoordinateInBound(coordinate, widthBlock, heightBlock) &&
+        !newArray[coordinate.x][coordinate.y].isBomb &&
+        !newArray[coordinate.x][coordinate.y].isSelected &&
+        hasAtleastOneFree(newArray, coordinate.x, coordinate.y)
+      ) {
+        {
+          newArray = replaceItemAtRowColumn<Block>(
+            newArray,
+            coordinate.x,
+            coordinate.y,
+            { ...newArray[coordinate.x][coordinate.y], isSelected: true }
+          );
+        }
+        // newGrid[coordinate.x,coordinate.y] = {...newItem};
+        queue.enqueue({ x: coordinate.x + 1, y: coordinate.y });
+        queue.enqueue({ x: coordinate.x - 1, y: coordinate.y });
+        queue.enqueue({ x: coordinate.x, y: coordinate.y + 1 });
+        queue.enqueue({ x: coordinate.x, y: coordinate.y - 1 });
+        // break;
+      } else {
+        if (
+          coordinate &&
+          hasAtleastOneFree(newArray, coordinate.x, coordinate.y)
+        ) {
+        }
+        continue;
+      }
+    }
+    setBlocks(newArray);
+
+    // setBlocks(newGrid);
+  };
+
   const initNumbers = (bombMountedArray: Block[][]) => {
     let newBlocks = bombMountedArray;
     for (let i = 0; i < heightBlock; i++) {
@@ -175,25 +262,21 @@ function App() {
   const getNearbyBombCount = (bombMountedArray: Block[][], focus: number[]) => {
     let nearbyBombCount: number = 0;
     //9direction search
-    // console.log('finding bomb count for :',focus);
     for (let i = -1; i < 2; i++) {
       for (let j = -1; j < 2; j++) {
-        // console.log('j:',j);
         let rowOfCurrentFocus = focus[0] + i;
         let columnOfCurrentFocus = focus[1] + j;
-        if (rowOfCurrentFocus == 0 || columnOfCurrentFocus == 0) {
+        if (rowOfCurrentFocus == 0 && columnOfCurrentFocus == 0) {
           continue;
         }
         if (
-          rowOfCurrentFocus < 0 ||
-          columnOfCurrentFocus < 0 ||
-          rowOfCurrentFocus >= heightBlock ||
-          columnOfCurrentFocus >= widthBlock
+          !isCoordinateInBound(
+            { x: rowOfCurrentFocus, y: columnOfCurrentFocus },
+            widthBlock,
+            heightBlock
+          )
         ) {
-          // console.log('current block is out of bounds: ',rowOfCurrentFocus,',',columnOfCurrentFocus);
           continue;
-        } else {
-          // console.log('inbound: ',rowOfCurrentFocus,',',columnOfCurrentFocus);
         }
         if (
           bombMountedArray[rowOfCurrentFocus][columnOfCurrentFocus].isBomb ===
@@ -249,7 +332,7 @@ function App() {
                     // maxWidth: itemWidth,
                     height: itemWidth,
                     borderWidth: 1,
-                    borderColor: "#fff",
+                    borderColor: item.isSelected ? "purple" : "#fff",
                     backgroundColor: item.isSelected
                       ? "green"
                       : "rgba(249, 180, 45, 0.25)",
