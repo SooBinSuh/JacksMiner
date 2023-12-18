@@ -90,7 +90,7 @@ function App() {
   const insets = useSafeAreaInsets();
   const widthBlock = 4; //가로 블록 계수
   const heightBlock = 5; //세로 블록 계수
-  const MINECOUNT = 3;
+  const MINECOUNT = 5;
 
   const windowWidth = Dimensions.get("window").width;
   const windowHeight =
@@ -170,12 +170,8 @@ function App() {
     }
   };
   const hasAtleastOneFree = (blocks: Block[][], row: number, col: number) => {
-    console.log("blocks", blocks);
     for (let i = -1; i < 2; i++) {
       for (let j = -1; j < 2; j++) {
-        if (i == 0 && j == 0) {
-          continue;
-        }
         if (
           !isCoordinateInBound(
             { x: row + i, y: col + j },
@@ -183,6 +179,7 @@ function App() {
             heightBlock
           )
         ) {
+          console.log('not bound:',row+i,',',col+j);
           continue;
         }
         if (blocks[row + i][col + j].nearbyBombCount == 0) {
@@ -210,8 +207,7 @@ function App() {
         coordinate &&
         isCoordinateInBound(coordinate, widthBlock, heightBlock) &&
         !newArray[coordinate.x][coordinate.y].isBomb &&
-        !newArray[coordinate.x][coordinate.y].isSelected &&
-        hasAtleastOneFree(newArray, coordinate.x, coordinate.y)
+        !newArray[coordinate.x][coordinate.y].isSelected 
       ) {
         {
           newArray = replaceItemAtRowColumn<Block>(
@@ -221,11 +217,24 @@ function App() {
             { ...newArray[coordinate.x][coordinate.y], isSelected: true }
           );
         }
-        // newGrid[coordinate.x,coordinate.y] = {...newItem};
-        queue.enqueue({ x: coordinate.x + 1, y: coordinate.y });
-        queue.enqueue({ x: coordinate.x - 1, y: coordinate.y });
-        queue.enqueue({ x: coordinate.x, y: coordinate.y + 1 });
-        queue.enqueue({ x: coordinate.x, y: coordinate.y - 1 });
+        if (hasAtleastOneFree(newArray, coordinate.x, coordinate.y)){
+          if (hasAtleastOneFree(newArray,coordinate.x +1,coordinate.y)){
+            queue.enqueue({ x: coordinate.x + 1, y: coordinate.y});
+          }
+          if (hasAtleastOneFree(newArray,coordinate.x -1,coordinate.y)){
+            queue.enqueue({ x: coordinate.x - 1, y: coordinate.y});
+          }
+          if (hasAtleastOneFree(newArray,coordinate.x ,coordinate.y+1)){
+            queue.enqueue({ x: coordinate.x , y: coordinate.y +1});
+          }
+          if (hasAtleastOneFree(newArray,coordinate.x ,coordinate.y-1)){
+            queue.enqueue({ x: coordinate.x, y: coordinate.y - 1});
+          }
+        }
+        
+        // queue.enqueue({ x: coordinate.x - 1, y: coordinate.y });
+        // queue.enqueue({ x: coordinate.x, y: coordinate.y + 1 });
+        // queue.enqueue({ x: coordinate.x, y: coordinate.y - 1 });
         // break;
       } else {
         if (
