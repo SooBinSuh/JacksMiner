@@ -1,6 +1,6 @@
 /** @format */
 
-import { StatusBar } from "expo-status-bar";
+// import { StatusBar } from "expo-status-bar";
 import {
   Children,
   PropsWithChildren,
@@ -13,13 +13,14 @@ import {
   Alert,
   Button,
   Dimensions,
+  Platform,
   SafeAreaView,
   StyleProp,
   StyleSheet,
   Text,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
+  StatusBar,
   ViewStyle,
 } from "react-native";
 import {
@@ -42,7 +43,10 @@ import {
   BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
 
-import { GestureHandlerRootView } from "react-native-gesture-handler";
+import {
+  GestureHandlerRootView,
+  TouchableWithoutFeedback,
+} from "react-native-gesture-handler";
 
 import { CustomText } from "./CustomText";
 
@@ -155,7 +159,7 @@ function hasAtleastOneFreeBlockExcludingSelf(
   return false;
 }
 
-function makeArray(rows: number, columns: number) {
+function makeGame(rows: number, columns: number) {
   let arr: Block[][] = [];
   for (let i = 0; i < columns; i++) {
     arr.push(
@@ -219,9 +223,9 @@ const boardState = atom<Block[][]>({
   default: [],
 });
 const secondsState = atom({
-  key:"Seconds",
-  default:0,
-})
+  key: "Seconds",
+  default: 0,
+});
 // const mineLeftState = atom<number>({
 //   key: "mineLeft",
 //   default: DEFAULT_MINE_LEFT,
@@ -230,7 +234,6 @@ const bottomSheetState = atom({
   key: "BottomSheetState",
   default: {
     isVisible: false,
-    selectedIndex: 0,
   },
 });
 const boardGeographyState = atom<BoardGeography>({
@@ -247,27 +250,27 @@ function getDefaultBoard(level: BoardLevel): BoardGeography {
         flagTotal: 0,
         isFreshBoard: true,
         level: BoardLevel.BEGINNER,
-        totalColoredCount:0,
+        totalColoredCount: 0,
       };
     case BoardLevel.INTERMEDIATE:
       return {
-        widthBlockCount: 16,
-        heightBlockCount: 16,
+        widthBlockCount: 10,
+        heightBlockCount: 14,
         mineTotal: 40,
         flagTotal: 0,
         isFreshBoard: true,
         level: BoardLevel.INTERMEDIATE,
-        totalColoredCount:0,
+        totalColoredCount: 0,
       };
     case BoardLevel.EXPERT:
       return {
-        widthBlockCount: 30,
-        heightBlockCount: 16,
+        widthBlockCount: 14,
+        heightBlockCount: 32,
         mineTotal: 99,
         flagTotal: 0,
         isFreshBoard: true,
         level: BoardLevel.EXPERT,
-        totalColoredCount:0,
+        totalColoredCount: 0,
       };
   }
 }
@@ -280,23 +283,23 @@ const minesLeftState = selector({
 });
 const areaLeftToSweepState = selector({
   key: "AreaLeftToSweep",
-  get:({get})=>{
+  get: ({ get }) => {
     // const blocks = get(boardState);
     const boardGeography = get(boardGeographyState);
-    return (boardGeography.widthBlockCount * boardGeography.heightBlockCount) - boardGeography.mineTotal - boardGeography.totalColoredCount;
-    // for(var i = 0; i < arrToConvert.length; i++)
-    // {
-    //     newArr = newArr.concat(arrToConvert[i]);
-    // }
-    
-  }
-})
+    return (
+      boardGeography.widthBlockCount * boardGeography.heightBlockCount -
+      boardGeography.mineTotal -
+      boardGeography.totalColoredCount
+    );
+  },
+});
 
 function App() {
   const insets = useSafeAreaInsets();
   const windowWidth = Dimensions.get("window").width;
   const windowHeight =
     Dimensions.get("window").height - insets.top - insets.bottom - 50;
+
   const bottomSheetModalRef = useRef<BottomSheetModal>(null);
   const [bottomSheet, setbottomSheet] = useRecoilState(bottomSheetState);
   const [seconds, setSeconds] = useRecoilState(secondsState);
@@ -316,45 +319,56 @@ function App() {
   const [blocks, setBlocks] = useRecoilState(boardState);
   const minesLeft = useRecoilValue(minesLeftState);
   const areaLeftToSweep = useRecoilValue(areaLeftToSweepState);
-
-  useEffect(()=>{
-    console.log('areaLefttosweep:',areaLeftToSweep);
-    if(areaLeftToSweep == 0){
+  // let itemWidth = Math.min(
+  //   windowWidth / boardGeography.widthBlockCount,
+  //   windowHeight / boardGeography.heightBlockCount
+  // );
+  const itemWidth = () => {
+    return Math.min(
+      windowWidth / boardGeography.widthBlockCount,
+      windowHeight / boardGeography.heightBlockCount
+    );
+  };
+  useEffect(() => {
+    console.log("areaLefttosweep:", areaLeftToSweep);
+    if (areaLeftToSweep == 0) {
       gameOver(true);
     }
-  },[areaLeftToSweep]);
-  useEffect(()=>{
-    // let interval;
-    if (boardGeography.isFreshBoard == false){
-      intervalRef.current = setInterval(()=>{
-        setSeconds((prevSeconds)=>prevSeconds+1);
-
-      },1000);
+  }, [areaLeftToSweep]);
+  useEffect(() => {
+    if (boardGeography.isFreshBoard == false) {
+      intervalRef.current = setInterval(() => {
+        setSeconds((prevSeconds) => prevSeconds + 1);
+      }, 1000);
     }
 
-    return ()=>clearInterval(intervalRef.current!);
-  },[boardGeography.isFreshBoard])
+    return () => clearInterval(intervalRef.current!);
+  }, [boardGeography.isFreshBoard]);
 
-  const itemWidth = Math.min(
-    windowWidth / boardGeography.widthBlockCount,
-    windowHeight / boardGeography.heightBlockCount
-  );
+  useEffect(() => {
+    // let interval;
+    resetGame();
+  }, [boardGeography.widthBlockCount, boardGeography.heightBlockCount]);
 
   //MARKER: Intents
   const resetGame = () => {
     setSeconds(0);
-    setBoardGeography(getDefaultBoard(boardGeography.level));
     setBlocks(
-      makeArray(boardGeography.widthBlockCount, boardGeography.heightBlockCount)
+      makeGame(boardGeography.widthBlockCount, boardGeography.heightBlockCount)
     );
-    
+    console.log(
+      "widthCount:",
+      boardGeography.widthBlockCount,
+      "height:",
+      boardGeography.heightBlockCount
+    );
+    setBoardGeography(getDefaultBoard(boardGeography.level));
   };
   const onItemLongPress = (
     index: number[],
     item: Block,
     boardgeography: BoardGeography
   ) => {
-    //TODO: refactor to selector , filtered flagged items
     if (item.isFlagged) {
       setBoardGeography({
         ...boardGeography,
@@ -375,6 +389,7 @@ function App() {
       })
     );
   };
+
   const onItemPress = (
     index: number[],
     item: Block,
@@ -383,6 +398,8 @@ function App() {
     if (item.isSelected) {
       return;
     }
+    const startTime = performance.now();
+
     console.log("onItemPress index:", index);
     ///MINE 초기값이면, 첫 클릭 후 MINE 위치 선정하여 Block updater
     // if (minesLeft == DEFAULT_MINE_LEFT) {
@@ -443,6 +460,8 @@ function App() {
         );
       }
     }
+    var endTime = performance.now()
+    console.log('Call onItemPress took ',endTime - startTime, 'milli sec');
   };
   const gameOver = (isWin: boolean) => {
     clearInterval(intervalRef.current);
@@ -451,7 +470,6 @@ function App() {
     } else {
       createAlert("패배했습니다.");
     }
-
   };
   const createAlert = (message: string) => {
     Alert.alert("GAME OVER", message, [
@@ -552,12 +570,15 @@ function App() {
         continue;
       }
     }
-    console.log('coloredCount:',coloredCount);
+    console.log("coloredCount:", coloredCount);
     setBlocks(newArray);
-    setBoardGeography({...boardGeography,totalColoredCount:boardGeography.totalColoredCount + coloredCount,isFreshBoard:false});
+    setBoardGeography({
+      ...boardGeography,
+      totalColoredCount: boardGeography.totalColoredCount + coloredCount,
+      isFreshBoard: false,
+    });
   };
 
-  //[1,1]
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
       <BottomSheetBackdrop
@@ -574,7 +595,10 @@ function App() {
 
   const onBottomSheetChocieTypePressed = (level: BoardLevel) => {
     //if state 올바르지 않은 값 OR 이미 선택한 타입 선택이면 리턴
-    setBoardGeography({ ...boardGeography, level: level });
+    console.log("clicked item:", level);
+    if(boardGeography.level != level){
+      setBoardGeography(getDefaultBoard(level));
+    }
     bottomSheetModalRef.current?.dismiss();
   };
 
@@ -582,14 +606,15 @@ function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <BottomSheetModalProvider>
         <View style={{ flex: 1 }}>
-          <SafeAreaView style={{ flex: 1 }}>
+          <SafeAreaView style={styles.AndroidSafeArea}>
             <View style={styles.container}>
               <View style={styles.scoreboardContianer}>
                 <Text>{minesLeft}</Text>
                 <Button
-                  title="Reset Button"
+                  title="😀"
                   onPress={() => {
-                    resetGame();
+                    // resetGame();
+                    setbottomSheet({ isVisible: true });
                   }}
                 />
                 <Text>{seconds}</Text>
@@ -606,15 +631,18 @@ function App() {
                 {blocks.map((row, rowIndex) => (
                   <View key={rowIndex} style={{ flexDirection: "row" }}>
                     {row.map((item, colIndex) => (
-                      <TouchableOpacity
+                      <TouchableWithoutFeedback
                         disabled={item.isSelected && item.isFlagged == false}
                         key={[rowIndex, colIndex].toString()}
                         onPress={() => {
-                          onItemPress(
-                            [rowIndex, colIndex],
-                            item,
-                            boardGeography
-                          );
+                          // requestAnimationFrame(()=>{
+                            onItemPress(
+                              [rowIndex, colIndex],
+                              item,
+                              boardGeography
+                            );
+                          // })
+                          
                         }}
                         onLongPress={() => {
                           console.log("on long press!");
@@ -627,8 +655,8 @@ function App() {
                         style={{
                           alignItems: "center",
                           justifyContent: "center",
-                          width: itemWidth,
-                          height: itemWidth,
+                          width: itemWidth(),
+                          height: itemWidth(),
                           borderWidth: 1,
                           borderColor: item.isSelected ? "purple" : "#fff",
                           backgroundColor: item.isSelected
@@ -649,7 +677,7 @@ function App() {
                               : ""}
                           </Text>
                         </Item>
-                      </TouchableOpacity>
+                      </TouchableWithoutFeedback>
                     ))}
                   </View>
                 ))}
@@ -675,9 +703,12 @@ function App() {
               }}
             >
               {Object.values(BoardLevel).map((value, index) => (
+                // <Button key={index} title={value} onPress={()=>onBottomSheetChocieTypePressed(value)}/>
                 <TouchableWithoutFeedback
                   key={index}
-                  onPress={() => onBottomSheetChocieTypePressed(value)}
+                  onPress={() => {
+                    onBottomSheetChocieTypePressed(value);
+                  }}
                   style={{ padding: 16 }}
                 >
                   <CustomText
@@ -710,6 +741,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",
+  },
+  AndroidSafeArea: {
+    flex: 1,
+    backgroundColor: "white",
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
   },
   scoreboardContianer: {
     // flex:0.1,
