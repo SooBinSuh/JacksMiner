@@ -8,18 +8,18 @@ export class Queue<T> {
     // this.items = [...params];
     this.items = [];
   }
-  enqueue(item:T){
+  enqueue(item: T) {
     return this.items.push(item);
   }
-  dequeue(){
+  dequeue() {
     return this.items.shift();
   }
-  isEmpty(){
-    return this.items.length == 0
+  isEmpty() {
+    return this.items.length == 0;
   }
 }
 
 export type Coordinate = {
-    x:number;
-    y:number
-}
+  x: number;
+  y: number;
+};
